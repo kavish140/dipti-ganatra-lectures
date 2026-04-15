@@ -6,23 +6,10 @@ import { fetchLectureById } from '@/services/lectures';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-// BigBlueButton config - update these for your instance
-const BBB_DOMAIN = import.meta.env.VITE_BBB_DOMAIN || 'https://demo.bigbluebutton.org';
-const BBB_SECRET = import.meta.env.VITE_BBB_SECRET || 'demo';
+const DEFAULT_MEET_DOMAIN = 'meet.jit.si';
 
 function sanitizeRoom(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-}
-
-function generateBBBJoinURL(meetingID: string, participantName: string): string {
-  const baseURL = `${BBB_DOMAIN}/bigbluebutton/api/join`;
-  const fullName = encodeURIComponent(participantName);
-  const params = new URLSearchParams({
-    meetingID,
-    fullName,
-    password: 'attendee',
-  });
-  return `${baseURL}?${params.toString()}`;
 }
 
 const LectureLive = () => {
@@ -31,6 +18,7 @@ const LectureLive = () => {
 
   const participantName = searchParams.get('name') || 'Guest';
   const role = searchParams.get('role') || 'attendee';
+  const meetDomain = DEFAULT_MEET_DOMAIN;
 
   const { data: lecture, isLoading } = useQuery({
     queryKey: ['lecture', lectureId],
@@ -39,7 +27,7 @@ const LectureLive = () => {
     refetchInterval: 10000,
   });
 
-  const meetingID = useMemo(() => {
+  const roomName = useMemo(() => {
     if (!lecture) {
       return '';
     }
@@ -51,13 +39,15 @@ const LectureLive = () => {
     return sanitizeRoom(`dipti-lecture-${lecture.id}`);
   }, [lecture]);
 
-  const bbbJoinURL = useMemo(() => {
-    if (!meetingID || !BBB_DOMAIN || !BBB_SECRET) {
+  const jitsiUrl = useMemo(() => {
+    if (!roomName) {
       return '';
     }
 
-    return generateBBBJoinURL(meetingID, participantName);
-  }, [meetingID, participantName]);
+    const encodedName = encodeURIComponent(participantName);
+    const hash = '#config.prejoinPageEnabled=false&config.startWithAudioMuted=false&config.startWithVideoMuted=false';
+    return `https://${meetDomain}/${roomName}?userInfo.displayName=${encodedName}${hash}`;
+  }, [meetDomain, participantName, roomName]);
 
   if (isLoading) {
     return (
@@ -146,7 +136,7 @@ const LectureLive = () => {
 
         <div className="overflow-hidden rounded-xl border bg-black">
           <iframe
-            src={bbbJoinURL}
+            src={jitsiUrl}
             title="Live lecture meeting"
             allow="camera; microphone; display-capture; fullscreen; autoplay"
             className="h-[78vh] w-full"

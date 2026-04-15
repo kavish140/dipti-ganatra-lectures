@@ -20,8 +20,6 @@ jobs:
     env:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-      VITE_BBB_DOMAIN: ${{ secrets.VITE_BBB_DOMAIN }}
-      VITE_BBB_SECRET: ${{ secrets.VITE_BBB_SECRET }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
