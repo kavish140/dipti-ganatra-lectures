@@ -10,3 +10,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
+
+export async function isAdminSignedIn(): Promise<boolean> {
+  if (!supabase) {
+    return false;
+  }
+
+  const { data } = await supabase.auth.getSession();
+  return !!data.session;
+}

@@ -19,7 +19,11 @@ The live classroom uses the free public Jitsi service by default:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
-- `VITE_ADMIN_PASSWORD`
+- `VITE_ADMIN_EMAIL` (optional, just pre-fills the login form)
+
+## Secure admin setup
+
+The admin panel uses Supabase Auth plus RLS. Create an admin account in Supabase Auth, then add its user ID to the `admin_users` table using the SQL in [SUPABASE_SECURE_ADMIN_SQL.md](SUPABASE_SECURE_ADMIN_SQL.md).
 
 Optional backend secrets used only if you extend the app:
 

@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Calendar, Clock3, IndianRupee, LogOut, PlayCircle, Plus, Square, Trash2, Users } from 'lucide-react';
@@ -19,10 +19,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/lib/supabase';
 
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD;
-const ADMIN_AUTH_KEY = 'dg_meet_admin_authenticated';
-
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL;
 interface LectureFormState {
   title: string;
   description: string;
@@ -58,16 +57,28 @@ function formatRupees(value: number): string {
 const Admin = () => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [emailInput, setEmailInput] = useState(ADMIN_EMAIL || '');
   const [passwordInput, setPasswordInput] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-
-    return window.localStorage.getItem(ADMIN_AUTH_KEY) === 'true';
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [form, setForm] = useState<LectureFormState>(initialForm);
   const [priceDraft, setPriceDraft] = useState('');
+
+  useEffect(() => {
+    const restoreSession = async () => {
+      if (!supabase) {
+        setCheckingSession(false);
+        return;
+      }
+
+      const { data } = await supabase.auth.getSession();
+      const hasSession = !!data.session;
+      setIsAuthenticated(hasSession);
+      setCheckingSession(false);
+    };
+
+    void restoreSession();
+  }, []);
 
   const { data: lectures = [], isLoading: loadingLectures } = useQuery({
     queryKey: ['lectures'],
@@ -178,28 +189,46 @@ const Admin = () => {
   const handleLogin = (event: FormEvent) => {
     event.preventDefault();
 
-    if (!ADMIN_PASSWORD) {
-      setIsAuthenticated(true);
-      window.localStorage.setItem(ADMIN_AUTH_KEY, 'true');
+    if (!supabase) {
       toast({
-        title: 'Admin mode enabled',
-        description: 'Set VITE_ADMIN_PASSWORD in env to require password protection.',
+        title: 'Supabase is not configured',
+        description: 'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY first.',
+        variant: 'destructive',
       });
       return;
     }
 
-    if (passwordInput === ADMIN_PASSWORD) {
-      setIsAuthenticated(true);
-      window.localStorage.setItem(ADMIN_AUTH_KEY, 'true');
-      setPasswordInput('');
+    if (!emailInput || !passwordInput) {
+      toast({ title: 'Enter email and password', variant: 'destructive' });
       return;
     }
 
-    toast({ title: 'Invalid password', variant: 'destructive' });
+    void supabase.auth
+      .signInWithPassword({
+        email: emailInput,
+        password: passwordInput,
+      })
+      .then(({ data, error }) => {
+        if (error || !data.session) {
+          toast({
+            title: 'Login failed',
+            description: error?.message || 'Please check your admin credentials.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        setIsAuthenticated(true);
+        setPasswordInput('');
+        toast({
+          title: 'Admin signed in',
+          description: 'You can now manage lectures securely through Supabase Auth.',
+        });
+      });
   };
 
   const handleLogout = () => {
-    window.localStorage.removeItem(ADMIN_AUTH_KEY);
+    void supabase?.auth.signOut();
     setIsAuthenticated(false);
   };
 
@@ -262,6 +291,14 @@ const Admin = () => {
     updatePriceMutation.mutate(price);
   };
 
+  if (checkingSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-secondary/40 px-4">
+        <p className="text-sm text-muted-foreground">Checking admin session...</p>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-secondary/40 px-4">
@@ -269,11 +306,21 @@ const Admin = () => {
           <CardHeader>
             <CardTitle className="font-heading">Admin Access</CardTitle>
             <CardDescription>
-              Sign in to manage lecture schedule and pricing for meet.drdiptiganatra.com.
+              Sign in with the doctor/admin Supabase account to manage lecture schedule and pricing securely.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="admin-email">Email</Label>
+                <Input
+                  id="admin-email"
+                  type="email"
+                  value={emailInput}
+                  onChange={(event) => setEmailInput(event.target.value)}
+                  placeholder="doctor@drdiptiganatra.com"
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="admin-password">Password</Label>
                 <Input
@@ -285,9 +332,9 @@ const Admin = () => {
                 />
               </div>
               <Button type="submit" className="w-full">Continue</Button>
-              {!ADMIN_PASSWORD && (
+              {!ADMIN_EMAIL && (
                 <p className="text-xs text-muted-foreground">
-                  VITE_ADMIN_PASSWORD is not set. Login is open for local/dev usage.
+                  Set VITE_ADMIN_EMAIL to prefill the admin email.
                 </p>
               )}
             </form>
