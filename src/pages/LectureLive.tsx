@@ -18,7 +18,7 @@ const LectureLive = () => {
 
   const participantName = searchParams.get('name') || 'Guest';
   const role = searchParams.get('role') || 'attendee';
-  const meetDomain = import.meta.env.VITE_MEET_DOMAIN || DEFAULT_MEET_DOMAIN;
+  const meetDomain = DEFAULT_MEET_DOMAIN;
 
   const { data: lecture, isLoading } = useQuery({
     queryKey: ['lecture', lectureId],
