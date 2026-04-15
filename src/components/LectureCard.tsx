@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Calendar, Clock, IndianRupee, MapPin, Users } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { Link } from 'react-router-dom';
 import type { Lecture } from '@/services/lectures';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -79,14 +80,22 @@ const LectureCard = ({ lecture, defaultPrice, index, onBook }: LectureCardProps)
       </div>
 
       <div className="border-t border-border px-5 py-4">
-        <Button
-          onClick={() => onBook(lecture)}
-          disabled={isFull}
-          className="w-full font-body font-semibold"
-          size="lg"
-        >
-          {isFull ? 'Join Waitlist' : 'Book Now'}
-        </Button>
+        <div className="grid gap-2">
+          {lecture.is_live && (
+            <Button asChild className="w-full font-body font-semibold" size="lg">
+              <Link to={`/live/${lecture.id}`}>Join Live Now</Link>
+            </Button>
+          )}
+          <Button
+            onClick={() => onBook(lecture)}
+            disabled={isFull}
+            variant={lecture.is_live ? 'outline' : 'default'}
+            className="w-full font-body font-semibold"
+            size="lg"
+          >
+            {isFull ? 'Join Waitlist' : 'Book Now'}
+          </Button>
+        </div>
       </div>
     </motion.div>
   );

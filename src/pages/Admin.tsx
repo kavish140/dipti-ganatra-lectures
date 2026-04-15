@@ -1,13 +1,15 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Calendar, Clock3, IndianRupee, LogOut, Plus, Trash2, Users } from 'lucide-react';
+import { Calendar, Clock3, IndianRupee, LogOut, PlayCircle, Plus, Square, Trash2, Users } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import {
   createLecture,
   deleteLecture,
   fetchGlobalLecturePrice,
   fetchLectures,
+  startLectureLive,
+  stopLectureLive,
   type LectureInput,
   updateGlobalLecturePrice,
 } from '@/services/lectures';
@@ -134,6 +136,42 @@ const Admin = () => {
 
       queryClient.invalidateQueries({ queryKey: ['globalLecturePrice'] });
       setPriceDraft('');
+    },
+  });
+
+  const startLiveMutation = useMutation({
+    mutationFn: startLectureLive,
+    onSuccess: (result) => {
+      if (!result.success || !result.lecture) {
+        toast({
+          title: 'Unable to start live lecture',
+          description: result.error || 'Please check Supabase columns and try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['lectures'] });
+      queryClient.invalidateQueries({ queryKey: ['lecture', result.lecture.id] });
+      toast({ title: 'Lecture is live', description: 'Attendees can now join the live session.' });
+    },
+  });
+
+  const stopLiveMutation = useMutation({
+    mutationFn: stopLectureLive,
+    onSuccess: (result) => {
+      if (!result.success || !result.lecture) {
+        toast({
+          title: 'Unable to stop live lecture',
+          description: result.error || 'Please try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['lectures'] });
+      queryClient.invalidateQueries({ queryKey: ['lecture', result.lecture.id] });
+      toast({ title: 'Lecture ended', description: 'Live join has been closed.' });
     },
   });
 
@@ -482,16 +520,48 @@ const Admin = () => {
                             INR {formatRupees(lecture.price_inr || globalPrice || 0)}
                           </span>
                         )}
+                        <span className={`font-medium ${lecture.is_live ? 'text-red-600' : 'text-muted-foreground'}`}>
+                          {lecture.is_live ? 'LIVE NOW' : 'Offline'}
+                        </span>
                       </div>
                     </div>
-                    <Button
-                      variant="destructive"
-                      onClick={() => deleteLectureMutation.mutate(lecture.id)}
-                      disabled={deleteLectureMutation.isPending}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Remove
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {lecture.is_live ? (
+                        <>
+                          <Button
+                            variant="secondary"
+                            asChild
+                          >
+                            <Link to={`/live/${lecture.id}?role=host&name=Dr.%20Dipti%20Ganatra`}>Open Live Room</Link>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => stopLiveMutation.mutate(lecture.id)}
+                            disabled={stopLiveMutation.isPending}
+                          >
+                            <Square className="mr-2 h-4 w-4" />
+                            End Live
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="default"
+                          onClick={() => startLiveMutation.mutate(lecture.id)}
+                          disabled={startLiveMutation.isPending}
+                        >
+                          <PlayCircle className="mr-2 h-4 w-4" />
+                          Start Live
+                        </Button>
+                      )}
+                      <Button
+                        variant="destructive"
+                        onClick={() => deleteLectureMutation.mutate(lecture.id)}
+                        disabled={deleteLectureMutation.isPending}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Remove
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>

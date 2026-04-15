@@ -14,6 +14,9 @@ export interface Lecture {
   location: string;
   image_url?: string;
   price_inr?: number | null;
+  is_live?: boolean;
+  meeting_room?: string | null;
+  live_started_at?: string | null;
 }
 
 export interface LectureInput {
@@ -29,6 +32,9 @@ export interface LectureInput {
   location: string;
   image_url?: string;
   price_inr?: number | null;
+  is_live?: boolean;
+  meeting_room?: string | null;
+  live_started_at?: string | null;
 }
 
 // Mock data for development / when Supabase isn't connected
@@ -46,6 +52,9 @@ const mockLectures: Lecture[] = [
     total_seats: 30,
     location: 'Virtual — Zoom',
     price_inr: 1499,
+    is_live: false,
+    meeting_room: null,
+    live_started_at: null,
   },
   {
     id: '2',
@@ -60,6 +69,9 @@ const mockLectures: Lecture[] = [
     total_seats: 25,
     location: 'Mumbai Medical Center',
     price_inr: 1999,
+    is_live: false,
+    meeting_room: null,
+    live_started_at: null,
   },
   {
     id: '3',
@@ -74,6 +86,9 @@ const mockLectures: Lecture[] = [
     total_seats: 40,
     location: 'Virtual — Zoom',
     price_inr: 1299,
+    is_live: false,
+    meeting_room: null,
+    live_started_at: null,
   },
   {
     id: '4',
@@ -88,6 +103,9 @@ const mockLectures: Lecture[] = [
     total_seats: 15,
     location: 'Mumbai Medical Center',
     price_inr: 2499,
+    is_live: false,
+    meeting_room: null,
+    live_started_at: null,
   },
 ];
 
@@ -116,6 +134,24 @@ function setLocalPrice(price: number): void {
   window.localStorage.setItem(LOCAL_PRICE_KEY, String(price));
 }
 
+function safeRoomToken(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+}
+
+function getOrCreateRoomName(lecture: Lecture): string {
+  if (lecture.meeting_room) {
+    return lecture.meeting_room;
+  }
+
+  const base = safeRoomToken(lecture.title || lecture.id);
+  const tail = safeRoomToken(lecture.id).slice(0, 10) || 'session';
+  return `dipti-${base || 'lecture'}-${tail}`;
+}
+
 export async function fetchLectures(): Promise<Lecture[]> {
   if (!supabase) {
     return localLectureStore;
@@ -139,6 +175,9 @@ export async function createLecture(input: LectureInput): Promise<{ success: boo
   if (!supabase) {
     const lecture: Lecture = {
       id: crypto.randomUUID(),
+      is_live: false,
+      meeting_room: null,
+      live_started_at: null,
       ...input,
     };
     localLectureStore = [...localLectureStore, lecture];
@@ -174,6 +213,110 @@ export async function deleteLecture(lectureId: string): Promise<{ success: boole
   }
 
   return { success: true };
+}
+
+export async function fetchLectureById(lectureId: string): Promise<Lecture | null> {
+  if (!supabase) {
+    return localLectureStore.find((lecture) => lecture.id === lectureId) || null;
+  }
+
+  const { data, error } = await supabase
+    .from('lectures')
+    .select('*')
+    .eq('id', lectureId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching lecture:', error);
+    return null;
+  }
+
+  return (data as Lecture) || null;
+}
+
+export async function startLectureLive(lectureId: string): Promise<{ success: boolean; lecture?: Lecture; error?: string }> {
+  if (!supabase) {
+    const lecture = localLectureStore.find((item) => item.id === lectureId);
+    if (!lecture) {
+      return { success: false, error: 'Lecture not found.' };
+    }
+
+    const room = getOrCreateRoomName(lecture);
+    const updated: Lecture = {
+      ...lecture,
+      is_live: true,
+      meeting_room: room,
+      live_started_at: new Date().toISOString(),
+    };
+
+    localLectureStore = localLectureStore.map((item) => (item.id === lectureId ? updated : item));
+    return { success: true, lecture: updated };
+  }
+
+  const { data: existing, error: readError } = await supabase
+    .from('lectures')
+    .select('*')
+    .eq('id', lectureId)
+    .maybeSingle();
+
+  if (readError || !existing) {
+    return { success: false, error: readError?.message || 'Lecture not found.' };
+  }
+
+  const existingLecture = existing as Lecture;
+  const room = getOrCreateRoomName(existingLecture);
+
+  const { data, error } = await supabase
+    .from('lectures')
+    .update({
+      is_live: true,
+      meeting_room: room,
+      live_started_at: new Date().toISOString(),
+    })
+    .eq('id', lectureId)
+    .select('*')
+    .single();
+
+  if (error) {
+    return {
+      success: false,
+      error: `${error.message}. Ensure lectures table has is_live, meeting_room, and live_started_at columns.`,
+    };
+  }
+
+  return { success: true, lecture: data as Lecture };
+}
+
+export async function stopLectureLive(lectureId: string): Promise<{ success: boolean; lecture?: Lecture; error?: string }> {
+  if (!supabase) {
+    const lecture = localLectureStore.find((item) => item.id === lectureId);
+    if (!lecture) {
+      return { success: false, error: 'Lecture not found.' };
+    }
+
+    const updated: Lecture = {
+      ...lecture,
+      is_live: false,
+    };
+    localLectureStore = localLectureStore.map((item) => (item.id === lectureId ? updated : item));
+    return { success: true, lecture: updated };
+  }
+
+  const { data, error } = await supabase
+    .from('lectures')
+    .update({ is_live: false })
+    .eq('id', lectureId)
+    .select('*')
+    .single();
+
+  if (error) {
+    return {
+      success: false,
+      error: `${error.message}. Ensure lectures table has is_live column.`,
+    };
+  }
+
+  return { success: true, lecture: data as Lecture };
 }
 
 export async function fetchGlobalLecturePrice(): Promise<number | null> {
